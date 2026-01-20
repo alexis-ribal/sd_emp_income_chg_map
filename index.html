@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>San Diego CCD Analysis Map</title>
+    
+    <!-- Leaflet CSS (CDN) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+        }
+        
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100vh;
+        }
+        
+        .info {
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            font-size: 14px;
+            line-height: 1.6;
+            max-width: 300px;
+        }
+        
+        .info h4 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .info p {
+            margin: 5px 0;
+            font-size: 13px;
+        }
+        
+        .info .source-text {
+            font-size: 11px;
+            color: #666;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #ddd;
+            line-height: 1.5;
+        }
+        
+        .variable-toggle {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            font-size: 13px;
+            max-width: 280px;
+        }
+        
+        .variable-toggle h4 {
+            margin: 0 0 12px 0;
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .toggle-button {
+            display: block;
+            width: 100%;
+            padding: 10px 12px;
+            margin: 6px 0;
+            border: 2px solid #ddd;
+            background: white;
+            color: #333;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            text-align: left;
+            line-height: 1.4;
+        }
+        
+        .toggle-button:hover {
+            background: #f0f0f0;
+            border-color: #999;
+        }
+        
+        .toggle-button.active {
+            background: #0078d4;
+            color: white;
+            border-color: #0078d4;
+        }
+        
+        .legend {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            line-height: 1.8;
+            font-size: 12px;
+            max-width: 260px;
+        }
+        
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.8;
+            border: 1px solid #999;
+        }
+        
+        .legend-label {
+            margin-bottom: 6px;
+            overflow: hidden;
+        }
+        
+        .legend-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 13px;
+        }
+        
+        .legend-subtitle {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 8px;
+            font-style: italic;
+        }
+        
+        .popup-content {
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+        }
+        
+        .popup-content h5 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+            border-bottom: 2px solid #0078d4;
+            padding-bottom: 5px;
+        }
+        
+        .popup-row {
+            margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .popup-label {
+            font-weight: 600;
+            color: #555;
+            margin-right: 10px;
+        }
+        
+        .popup-value {
+            color: #333;
+            font-weight: bold;
+            text-align: right;
+        }
+        
+        .popup-positive {
+            color: #d73027;
+        }
+        
+        .popup-negative {
+            color: #4575b4;
+        }
+        
+        .popup-years {
+            font-size: 12px;
+            color: #666;
+            font-style: italic;
+            margin-top: 5px;
+            padding-top: 5px;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <!-- Leaflet JS (CDN) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // Variable configuration with metadata
+        const variables = {
+            unemp_2023_2010: {
+                name: 'Unemployment Change',
+                fullName: 'Unemployment Rate Change (%)',
+                years: '2010-2023',
+                unit: '%',
+                description: 'Change in unemployment rate',
+                isBetter: 'negative',
+                dataType: 'rate'
+            },
+            unemp_2020_2019: {
+                name: 'Unemployment Change',
+                fullName: 'Unemployment Rate Change (%)',
+                years: '2019-2020',
+                unit: '%',
+                description: 'Change in unemployment rate',
+                isBetter: 'negative',
+                dataType: 'rate'
+            },
+            lt10k_2023_2010: {
+                name: 'Families <$10k Change',
+                fullName: 'Families Living Under $10k Change (share of total families)',
+                years: '2010-2023',
+                unit: '%',
+                description: 'Share of families under $10k',
+                isBetter: 'negative',
+                dataType: 'share'
+            },
+            lt10k_2020_2019: {
+                name: 'Families <$10k Change',
+                fullName: 'Families Living Under $10k Change (share of total families)',
+                years: '2019-2020',
+                unit: '%',
+                description: 'Share of families under $10k',
+                isBetter: 'negative',
+                dataType: 'share'
+            }
+        };
+
+        let currentVariable = 'unemp_2023_2010';
+        let geojsonLayers = {};
+        let currentLayer;
+        let geoJsonData;
+        let dataStats = {};
+        let mapReady = false;
+
+        // Initialize map centered on San Diego
+        const map = L.map('map').setView([32.7157, -117.1611], 10);
+
+        // Add base tile layer (fast rendering with Carto)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap contributors © CARTO',
+            maxZoom: 19,
+            maxNativeZoom: 18
+        }).addTo(map);
+
+        // Calculate data statistics for better color scaling
+        function calculateStats(data, varName) {
+            let values = [];
+            data.features.forEach(feature => {
+                const val = feature.properties[varName];
+                if (val !== null && val !== undefined && !isNaN(val)) {
+                    values.push(parseFloat(val));
+                }
+            });
+            
+            values.sort((a, b) => a - b);
+            
+            return {
+                min: Math.min(...values),
+                max: Math.max(...values),
+                values: values,
+                count: values.length
+            };
+        }
+
+        // Color function - diverging blue to red scale
+        // EDIT 2: Blue for zero or negative, Red for positive only
+        function getColor(value, varName) {
+            if (value === null || isNaN(value)) return '#e8e8e8';
+            
+            const stats = dataStats[varName];
+            if (!stats) return '#e8e8e8';
+            
+            // NEW LOGIC: Separate scales for negative and positive values
+            // Negative values (0 to min): mapped to blue scale
+            // Positive values (0 to max): mapped to red scale
+            
+            if (value <= 0) {
+                // Blue scale for negative/zero values
+                const negRange = Math.abs(stats.min);
+                if (negRange === 0) return '#d0d1e6'; // Neutral blue
+                const negNormalized = Math.abs(value) / negRange; // 0 to 1
+                
+                if (negNormalized < 0.1) return '#f7fbff';      // Very light blue
+                if (negNormalized < 0.2) return '#deebf7';      // Light blue
+                if (negNormalized < 0.3) return '#c6dbef';      // Light-medium blue
+                if (negNormalized < 0.4) return '#9ecae1';      // Medium blue
+                if (negNormalized < 0.5) return '#6baed6';      // Medium blue
+                if (negNormalized < 0.6) return '#4292c6';      // Dark-medium blue
+                if (negNormalized < 0.7) return '#2171b5';      // Dark blue
+                if (negNormalized < 0.8) return '#08519c';      // Darker blue
+                return '#08306b';                               // Very dark blue
+            } else {
+                // Red scale for positive values
+                const posRange = stats.max;
+                if (posRange === 0) return '#fee5d9'; // Neutral red
+                const posNormalized = value / posRange; // 0 to 1
+                
+                if (posNormalized < 0.1) return '#fee5d9';      // Very light red
+                if (posNormalized < 0.2) return '#fcbba1';      // Light red
+                if (posNormalized < 0.3) return '#fc9272';      // Light-medium red
+                if (posNormalized < 0.4) return '#fb6a4a';      // Medium red
+                if (posNormalized < 0.5) return '#ef3b2c';      // Medium-dark red
+                if (posNormalized < 0.6) return '#de2d26';      // Dark red
+                if (posNormalized < 0.7) return '#cb181d';      // Darker red
+                if (posNormalized < 0.8) return '#a50f15';      // Very dark red
+                return '#67000d';                               // Darkest red
+            }
+        }
+
+        // Style function
+        function style(feature, varName) {
+            const value = feature.properties[varName];
+            return {
+                fillColor: getColor(value, varName),
+                weight: 1.5,
+                opacity: 1,
+                color: '#555',
+                dashArray: '',
+                fillOpacity: 0.75
+            };
+        }
+
+        // Hover styles
+        function highlightFeature(e) {
+            const layer = e.target;
+            layer.setStyle({
+                weight: 3,
+                color: '#000',
+                dashArray: '',
+                fillOpacity: 0.95
+            });
+            
+            if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                layer.bringToFront();
+            }
+        }
+
+        function resetHighlight(e) {
+            if (currentLayer) {
+                currentLayer.resetStyle(e.target);
+            }
+        }
+
+        // Create popup content with enhanced information
+        // EDIT 1: Pull NAME from properties and display region name
+        function getPopupContent(feature) {
+            const props = feature.properties;
+            const value = props[currentVariable];
+            const varConfig = variables[currentVariable];
+            const regionName = props.NAME || props.name || 'Region'; // EDIT 1: Use NAME variable
+            
+            // Determine trend direction
+            let trend = '';
+            let trendColor = '';
+            let trendSymbol = '';
+            
+            if (value < 0) {
+                trend = 'Improved (Decreased)';
+                trendColor = '#4575b4';
+                trendSymbol = '↓';
+            } else if (value > 0) {
+                trend = 'Worsened (Increased)';
+                trendColor = '#d73027';
+                trendSymbol = '↑';
+            } else {
+                trend = 'No Change';
+                trendColor = '#999';
+                trendSymbol = '→';
+            }
+            
+            const valueClass = value < 0 ? 'popup-negative' : (value > 0 ? 'popup-positive' : '');
+            
+            const html = `
+                <div class="popup-content">
+                    <h5>Region: ${regionName}</h5>
+                    <div class="popup-row">
+                        <span class="popup-label">Metric:</span>
+                        <span>${varConfig.fullName}</span>
+                    </div>
+                    <div class="popup-row">
+                        <span class="popup-label">Value:</span>
+                        <span class="popup-value ${valueClass}">${value !== null ? (value > 0 ? '+' : '') + value.toFixed(2) : 'N/A'} ${varConfig.unit}</span>
+                    </div>
+                    <div class="popup-row">
+                        <span class="popup-label">Trend:</span>
+                        <span style="color: ${trendColor}; font-weight: bold;">${trendSymbol} ${trend}</span>
+                    </div>
+                    <div class="popup-years">${varConfig.years}</div>
+                </div>
+            `;
+            
+            return html;
+        }
+
+        function onEachFeature(feature, layer) {
+            // Create popup
+            const popup = L.popup({
+                maxWidth: 320,
+                className: 'custom-popup'
+            }).setContent(getPopupContent(feature));
+            
+            layer.bindPopup(popup);
+            
+            layer.on({
+                mouseover: function(e) {
+                    highlightFeature(e);
+                    e.target.openPopup();
+                },
+                mouseout: function(e) {
+                    resetHighlight(e);
+                    e.target.closePopup();
+                }
+            });
+        }
+
+        // Info panel
+        const info = L.control({position: 'topleft'});
+
+        info.onAdd = function (map) {
+            this._div = L.DomUtil.create('div', 'info');
+            this._div.innerHTML = '<h4>Loading...</h4><p>Please wait</p>';
+            return this._div;
+        };
+        
+        function updateInfoPanel() {
+            if (!mapReady) return;
+            
+            const varConfig = variables[currentVariable];
+            const stats = dataStats[currentVariable];
+            
+            if (!stats) return;
+            
+            // EDIT 3: Add source and credits text below hover instruction
+            info._div.innerHTML = `
+                <h4>${varConfig.fullName}</h4>
+                <p><strong>Years:</strong> ${varConfig.years}</p>
+                <p><strong>Range:</strong> ${stats.min.toFixed(2)} to ${stats.max.toFixed(2)} ${varConfig.unit}</p>
+                <p style="font-size: 12px; color: #666; margin-top: 8px;">Hover over a region to see details</p>
+                <div class="source-text">
+                    Source: ACS 5-Year Estimates Data Profiles via data.census.gov
+                    <br><br>
+                    Dashboard credits: Alexis Rivera (@alexiconomics)
+                </div>
+            `;
+        }
+        
+        info.addTo(map);
+
+        // Variable toggle control
+        const toggleControl = L.control({position: 'topleft'});
+
+        toggleControl.onAdd = function (map) {
+            const div = L.DomUtil.create('div', 'variable-toggle');
+            div.innerHTML = '<h4>Select Variable:</h4>';
+            
+            Object.keys(variables).forEach(varKey => {
+                const button = L.DomUtil.create('button', 'toggle-button', div);
+                button.textContent = variables[varKey].fullName + ` (${variables[varKey].years})`;
+                button.id = 'btn-' + varKey;
+                
+                if (varKey === currentVariable) {
+                    button.classList.add('active');
+                }
+                
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (mapReady) {
+                        changeVariable(varKey);
+                    }
+                });
+            });
+            
+            L.DomEvent.disableClickPropagation(div);
+            
+            return div;
+        };
+        toggleControl.addTo(map);
+
+        // Change variable and layer function
+        function changeVariable(varName) {
+            if (!mapReady || !geoJsonData || !dataStats[varName]) {
+                console.error('Map not ready or data missing for variable:', varName);
+                return;
+            }
+            
+            // Remove current layer
+            if (currentLayer) {
+                map.removeLayer(currentLayer);
+            }
+            
+            currentVariable = varName;
+            
+            // Update all button states
+            document.querySelectorAll('.toggle-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById('btn-' + varName).classList.add('active');
+            
+            // Create or reuse the layer for this variable
+            if (!geojsonLayers[varName]) {
+                geojsonLayers[varName] = L.geoJson(geoJsonData, {
+                    style: (feature) => style(feature, varName),
+                    onEachFeature: onEachFeature
+                });
+            }
+            
+            // Add the layer to map
+            currentLayer = geojsonLayers[varName];
+            currentLayer.addTo(map);
+            
+            // Update info panel and legend
+            updateInfoPanel();
+            updateLegend();
+        }
+
+        // Legend control
+        const legend = L.control({position: 'bottomright'});
+
+        legend.onAdd = function (map) {
+            const div = L.DomUtil.create('div', 'legend');
+            updateLegendContent(div);
+            this._div = div;
+            return div;
+        };
+        
+        // EDIT 2: Updated legend to show separate negative and positive scales
+        function updateLegendContent(div) {
+            if (!mapReady || !dataStats[currentVariable]) return;
+            
+            const stats = dataStats[currentVariable];
+            const varConfig = variables[currentVariable];
+            
+            div.innerHTML = `
+                <div class="legend-title">${varConfig.fullName}</div>
+                <div class="legend-subtitle">${varConfig.years}</div>
+            `;
+            
+            // Create negative scale (blue)
+            if (stats.min < 0) {
+                const negDiv = document.createElement('div');
+                negDiv.style.marginBottom = '10px';
+                negDiv.innerHTML = '<div style="font-weight: 600; font-size: 12px; margin-bottom: 5px; color: #0066cc;">↓ Improved (Negative)</div>';
+                div.appendChild(negDiv);
+                
+                const negBreaks = [];
+                for (let i = 0; i <= 5; i++) {
+                    negBreaks.push(stats.min + (Math.abs(stats.min) * (i / 5)));
+                }
+                
+                for (let i = 0; i < negBreaks.length - 1; i++) {
+                    const from = negBreaks[i];
+                    const to = negBreaks[i + 1];
+                    const midpoint = (from + to) / 2;
+                    
+                    const label = document.createElement('div');
+                    label.className = 'legend-label';
+                    
+                    const color = document.createElement('i');
+                    color.style.background = getColor(midpoint, currentVariable);
+                    
+                    const text = document.createElement('span');
+                    text.textContent = `${from.toFixed(2)} to ${to.toFixed(2)}`;
+                    
+                    label.appendChild(color);
+                    label.appendChild(text);
+                    div.appendChild(label);
+                }
+            }
+            
+            // Create positive scale (red)
+            if (stats.max > 0) {
+                const posDiv = document.createElement('div');
+                posDiv.style.marginTop = '10px';
+                posDiv.style.paddingTop = '10px';
+                posDiv.style.borderTop = '1px solid #ddd';
+                posDiv.innerHTML = '<div style="font-weight: 600; font-size: 12px; margin-bottom: 5px; color: #cc0000;">↑ Worsened (Positive)</div>';
+                div.appendChild(posDiv);
+                
+                const posBreaks = [];
+                for (let i = 0; i <= 5; i++) {
+                    posBreaks.push(stats.max * (i / 5));
+                }
+                
+                for (let i = 0; i < posBreaks.length - 1; i++) {
+                    const from = posBreaks[i];
+                    const to = posBreaks[i + 1];
+                    const midpoint = (from + to) / 2;
+                    
+                    const label = document.createElement('div');
+                    label.className = 'legend-label';
+                    
+                    const color = document.createElement('i');
+                    color.style.background = getColor(midpoint, currentVariable);
+                    
+                    const text = document.createElement('span');
+                    text.textContent = `${from.toFixed(2)} to ${to.toFixed(2)}`;
+                    
+                    label.appendChild(color);
+                    label.appendChild(text);
+                    div.appendChild(label);
+                }
+            }
+        }
+        
+        function updateLegend() {
+            if (legend._div) {
+                updateLegendContent(legend._div);
+            }
+        }
+        
+        legend.addTo(map);
+
+        // Load GeoJSON
+        fetch('SAN_CCD.json')
+            .then(response => {
+                console.log('Fetch response status:', response.status);
+                if (!response.ok) throw new Error('Failed to load SAN_CCD.json');
+                return response.json();
+            })
+            .then(data => {
+                console.log('GeoJSON loaded successfully:', data.features.length, 'features');
+                geoJsonData = data;
+                
+                // Calculate stats for ALL variables FIRST
+                console.log('Calculating stats for all variables...');
+                Object.keys(variables).forEach(varName => {
+                    dataStats[varName] = calculateStats(data, varName);
+                    console.log(`Stats for ${varName}:`, dataStats[varName]);
+                });
+                
+                // Set flag that data is ready
+                mapReady = true;
+                
+                // NOW initialize with the default variable
+                console.log('Initializing map with variable:', currentVariable);
+                changeVariable(currentVariable);
+            })
+            .catch(error => {
+                console.error('Error loading GeoJSON:', error);
+                console.error('Error message:', error.message);
+                info._div.innerHTML = '<h4>Error</h4><p>Could not load map data. Check console for details.</p>';
+            });
+
+    </script>
+</body>
+</html>
